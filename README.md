@@ -1,4 +1,6 @@
-![3DCube.png](https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/3DCube.png)
+<p align="center">
+  <img src="https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/3DCube.png" alt="3D Data cube"/>
+</p>
 
 # Multidimensional Building Data Cube Pattern Identification
 
@@ -38,12 +40,13 @@ This work follows the [Automated daily pattern filtering of measured building pe
 The analysis then performs pattern identification as an OLAM process over the 2D lattice of the cube where each cuboids serves for specific insights, i.e., building benchmarking, in-site view and cross building-attribute slice analysis.
 
 
-%### Manuscript and Presentation
+<!--### Manuscript and Presentation
 
-%The manuscript & presentation of the given work are located under the `manuscript/` folder or can be accessed from the below hyperlinks.
+The manuscript & presentation of the given work are located under the `manuscript/` folder or can be accessed from the below hyperlinks.
 
-%* The manuscript PDF can be found [here](https://github.com/FedericoTartarini/reproducible-research/blob/master/manuscript/presentation_out/presentation.pdf).
-%* The presentation PDF can be found [here](https://github.com/FedericoTartarini/reproducible-research/blob/master/manuscript/out/main.pdf).
+* The manuscript PDF can be found [here](https://github.com/FedericoTartarini/reproducible-research/blob/master/manuscript/presentation_out/presentation.pdf).
+* The presentation PDF can be found [here](https://github.com/FedericoTartarini/reproducible-research/blob/master/manuscript/out/main.pdf).
+-->
 
 
 
@@ -53,10 +56,9 @@ The analysis then performs pattern identification as an OLAM process over the 2D
 * **[Clayton Miller](https://github.com/cmiller8)** - *Initial work*
 * **[Wim Zeiler](https://www.tue.nl/en/research/researchers/wim-zeiler/)** - *Initial work*
 
-%See also the list of [contributors](https://github.com/FedericoTartarini/reproducible-research/contributors) who participated in this project.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-%## CHANGELOG
+
