@@ -17,7 +17,7 @@ Contributions of this work can be summarized as three-fold:
 -   [Getting Started](#getting-started)
     -   [Data](#source-data)
     -   [Data Analysis](#data-analysis)
-    -   [Manuscript and Presentation](#manuscript-and-presentation)
+<!--    -   [Manuscript and Presentation](#manuscript-and-presentation) -->
 -   [Author](#authors)
 -   [Licence](#license)
 
