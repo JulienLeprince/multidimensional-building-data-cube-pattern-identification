@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/3DCube.png" alt="3D Data cube"/>
+  <img src="https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/README_Header.jpg" alt="Nultidimensional Building Data Cube Mining"/>
 </p>
 
 # Multidimensional Building Data Cube Pattern Identification
