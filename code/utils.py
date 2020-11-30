@@ -226,6 +226,44 @@ def sax_df_reformat(sax_data, sax_dict, meter_data, space_btw_saxseq=3):
     new_sax_df.drop("SAX", axis=1, inplace=True)
     return new_sax_df, index_map_dictionary
 
+def clust_df_reformat(df_data, clust_dict, meter_data, space_btw_saxseq=3, s_size=5):
+    """"Function to format the timeseries original data for clustered heatmap plotting."""
+
+    # Initializing new dataframes
+    empty_sax_df = pd.DataFrame(columns=df_data.index, index=[' ']*space_btw_saxseq)
+    new_sax_df = pd.DataFrame(columns=df_data.index)
+    # Creating quantiles vector
+    qtl1 = list(np.linspace(0.25, 0.5, 2+s_size))
+    qtl2 = list(np.linspace(0.5, 0.75, 2+s_size))
+    qtls = list(dict.fromkeys(qtl1 + qtl2))
+
+    for clus in clust_dict:
+        try:
+            # Selecting cluster data per attribute from frame
+            df_c = multicol_inverseCols(df_data[clust_dict[clus]])[meter_data]
+            # Normalizing
+            df_c = scale_df_columns_NanRobust(df_c, df_c.columns, scaler=StandardScaler())
+            # Calculating condensed quantile information for display
+            df_block = df_c.transpose().quantile(qtls)
+        except KeyError:
+            # If column does not exist in DataFrame, i.e. droped from all Nans, use an empty frame instead
+            df_block = pd.DataFrame(columns=df_data.index, index=[' ']*len(qtls))
+        # Formating a newdataframe from selected sax_seq
+        df_block["cluster_id"] = [clus]*len(df_block.values)
+        new_sax_df = pd.concat([df_block, empty_sax_df, new_sax_df], axis=0) # Reformated dataframe
+
+    # Mapping the sax sequence to the data
+    index_map_dictionary = {"clust_idx": [], "clust": []}
+    for clus in clust_dict:
+        indexes = [i for i, x in enumerate(new_sax_df["cluster_id"]) if x == clus]  # returns all indexes
+        index_map_dictionary["clust"].append("cluster "+str(clus)+ " (N=" + str(len(clust_dict[clus]))+ ")")
+        index_map_dictionary["clust_idx"].append(np.median(indexes))
+    # Droping the SAX column of the dataframe now that we have a mapping variable for it
+    new_sax_df.drop("cluster_id", axis=1, inplace=True)
+    # Keeping only Hourly information from datetime columns
+    new_sax_df.columns = pd.to_datetime(new_sax_df.transpose().index).hour
+    return new_sax_df, index_map_dictionary
+
 ### Visualization functions functions
 
 def SAXcount_hm_wdendro(df_count, title):
@@ -298,7 +336,6 @@ def SAX_dailyhm_visualization(dict_numeric, sax_dict, index_map_dictionary, titl
             sax_seq_int = sax_seq_int + 1
         key_int = key_int + 1
 
-
     # Calling the subplots
     fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False, 
     horizontal_spacing=0.01+len(sax_dict[key][0])*0.005, column_titles=keys, x_title="Hour of the day")
@@ -323,6 +360,49 @@ def SAX_dailyhm_visualization(dict_numeric, sax_dict, index_map_dictionary, titl
                       title_text=f"Daily SAX profiles of {title}",
                       plot_bgcolor='#fff'
                       )
+    return fig
+
+def clust_dailyhm_visualization(dict_numeric, index_map_dictionary, title):
+    """"Function to visualize multi-attribute clustered timeseries from original dataframe with cluster dictionary"""
+    keys = list(dict_numeric.keys())
+    key_int = 0
+    # First loop over all keys and data to identify min and max values of the time series
+    for key in dict_numeric:    # key can be meter_data or bld_id depending on the cuboid selected
+        if key_int < 1:
+            pzmax = dict_numeric[key].max().max()
+            pzmin = dict_numeric[key].min().min()
+        else:
+            pzmax = max(pzmax, dict_numeric[key].max().max())
+            pzmin = min(pzmin, dict_numeric[key].min().min())
+        key_int = key_int + 1
+    
+    # Calling the subplots
+    fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False, 
+    horizontal_spacing=0.005, column_titles=keys, x_title="Hour of the day")
+    # Then Loop again of the set to plot
+    key_int = 0
+    # Looping over sax keys (i.e. attributes or blg keys)
+    for key in dict_numeric:
+        # Plot
+        fig.add_trace(go.Heatmap(z=dict_numeric[key],
+                                 x=dict_numeric[key].columns,
+                                 zmax=pzmax, zmin=pzmin,
+                                 colorbar={"title": "Attribute normalized value"},
+                                 colorscale='temps'),
+                      row=1, col=key_int + 1)
+        fig.update_yaxes(tickmode='array',
+                         tickvals=index_map_dictionary[key]["clust_idx"],
+                         ticktext=[' ']*len(index_map_dictionary[key]["clust_idx"]),
+                         row=1, col=key_int+1)
+        key_int = key_int + 1
+    fig.update_yaxes(tickmode='array',
+                    tickvals=index_map_dictionary[key]["clust_idx"],
+                    ticktext=index_map_dictionary[key]["clust"],
+                    row=1, col=1)
+    fig.update_layout(height=800, width=len(keys)*250,
+                      xaxis={"tickmode": "array"},
+                      title_text=f"Daily SAX profiles of {title}",
+                      plot_bgcolor='#fff')
     return fig
 
 def genSankey(df,cat_cols=[],value_cols='',title='Sankey Diagram'):
