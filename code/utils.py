@@ -1,12 +1,10 @@
 # Import modules
 import pandas as pd
 import numpy as np
-import time
 from sklearn.cluster import KMeans
 import sklearn.metrics as metrics
 # SAX package - source https://github.com/seninp/saxpy
 from saxpy.alphabet import cuts_for_asize
-from saxpy.znorm import znorm
 from saxpy.sax import ts_to_string
 from saxpy.paa import paa
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
@@ -17,7 +15,6 @@ import matplotlib.pyplot as plt
 plt.rcdefaults()
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
-from plotly.colors import n_colors
 from plotly.subplots import make_subplots
 from plotly.offline import init_notebook_mode
 init_notebook_mode(connected = True)
@@ -206,21 +203,30 @@ def sax_df_reformat(sax_data, sax_dict, meter_data, space_btw_saxseq=3):
     counter = {k: v for k, v in sorted(counts_nb.items(), key=lambda item: item[1])}
     keys = counter.keys()
 
-    empty_sax_df = pd.DataFrame(columns=sax_data[meter_data].columns, index=[' ']*space_btw_saxseq)
     new_sax_df = pd.DataFrame(columns=sax_data[meter_data].columns)
+    empty_sax_df = pd.DataFrame(columns=sax_data[meter_data].columns, index=[' '] * space_btw_saxseq)
     for sax_seq in keys:
+        if counter[sax_seq] > 10:
+            empty_sax_df = pd.DataFrame(columns=sax_data[meter_data].columns, index=[' '] * space_btw_saxseq)
+        else:
+            s2 = min(int(round(space_btw_saxseq*(counter[sax_seq]/5))), space_btw_saxseq)
+            empty_sax_df = pd.DataFrame(columns=sax_data[meter_data].columns, index=[' ']*s2)
         # Obtaining sax indexes of corresponding profiles within dataframe
-        indexes = [i for i,x in enumerate(sax_dict[meter_data]) if x == sax_seq]   # returns all indexes
+        indexes = [i for i, x in enumerate(sax_dict[meter_data]) if x == sax_seq]  # returns all indexes
         # Formating a newdataframe from selected sax_seq
         df_block = sax_data[meter_data].iloc[indexes].copy()
-        df_block["SAX"] = [sax_seq]*len(indexes)
-        new_sax_df = pd.concat([df_block, empty_sax_df, new_sax_df], axis=0) # Reformated dataframe
+        df_block["SAX"] = [sax_seq] * len(indexes)
+        new_sax_df = pd.concat([df_block, empty_sax_df, new_sax_df], axis=0)  # Reformated dataframe
     # Mapping the sax sequence to the data
     index_map_dictionary = dict()
     index_map_dictionary["SAX_seq"], index_map_dictionary["SAX_idx"] = [], []
-    for sax_seq in keys:
+    for sax_seq in counter:
         indexes = [i for i, x in enumerate(new_sax_df["SAX"]) if x == sax_seq]  # returns all indexes
-        index_map_dictionary["SAX_seq"].append(sax_seq)
+        #index_map_dictionary["SAX_seq"].append(sax_seq)
+        if counter[sax_seq] > 10:
+            index_map_dictionary["SAX_seq"].append(sax_seq)
+        else:
+            index_map_dictionary["SAX_seq"].append(" ")
         index_map_dictionary["SAX_idx"].append(np.median(indexes))
     # Droping the SAX column of the dataframe now that we have a mapping variable for it
     new_sax_df.drop("SAX", axis=1, inplace=True)
@@ -266,7 +272,7 @@ def clust_df_reformat(df_data, clust_dict, meter_data, space_btw_saxseq=3, s_siz
 
 ### Visualization functions functions
 
-def SAXcount_hm_wdendro(df_count, title):
+def SAXcount_hm_wdendro(df_count):
     # Create Side Dendrogram
     # source: https://plotly.com/python/dendrogram/
     dendo = ff.create_dendrogram(df_count.values, orientation='left', labels=list(df_count.index.values))
@@ -288,205 +294,136 @@ def SAXcount_hm_wdendro(df_count, title):
                                     y=df_count.index[dendro_leaves],
                                     # zmax=pzmax, zmin=pzmin,
                                     colorbar={"title": "Counts"},
-                                    colorscale='Blues'))
-    p_width = len(df_count.columns)*5 if len(df_count.columns)*5 > 400 else 400
-    fig.update_layout(height=900, width=p_width,
+                                    colorscale='Greys'))
+    fig.update_layout(height=700, width=1200,  #small: height=600, width=700,
                       xaxis={"tickmode": "array"},
-                      title_text=f"SAX counts for attribute: {title}",
-                      plot_bgcolor='#fff'
+                      #title_text=f"SAX counts for attribute: {title}",
+                      plot_bgcolor='#fff',
+                      font=dict(
+                          family="Times New Roman",
+                          color='black',
+                          size=18),
                       )
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=18)
     return fig
 
-def counter_plot(counter, title=None):
-    """Simple demo of a horizontal bar chart.
-    Source: https://stackoverflow.com/questions/22222573/how-to-plot-counter-object-in-horizontal-bar-chart"""
-    # Sort the counter dictionnary per value
-    # source: https://stackoverflow.com/questions/613183/how-do-i-sort-a-dictionary-by-value
-    counter = {k: v for k, v in sorted(counter.items(), key=lambda item: item[1])}
-    # Counter data, counter is your counter object
-    keys = counter.keys()
-    y_pos = np.arange(len(keys))
-    # get the counts for each key, assuming the values are numerical
-    performance = [counter[k] for k in keys]
-    # Now plotting
-    fig = plt.figure(figsize=(6, 6))
-    plt.barh(y_pos, performance, align='center', alpha=0.4)
-    plt.yticks(y_pos, keys)
-    plt.xlabel('Number of profiles per symbolic sequence')
-    plt.title(title)
-    plt.show()
-    return fig
-
-def SAX_dailyhm_visualization(dict_numeric, sax_dict, index_map_dictionary, title):
+def SAX_dailyhm_visualization(dict_numeric, sax_dict, index_map_dictionary):
     """"Function to visualize multi-attribute SAX sequences from original dataframe with SAX dictionary"""
     keys = list(sax_dict.keys())
     key_int = 0
     # First loop over all keys and data to identify min and max values of the time series
-    for key in sax_dict:    # key can be meter_data or bld_id depending on the cuboid selected
-        sax_seq_int = 0
-        for sax_sequence_toidentify in sax_dict[key]:
-            indexes = [i for i, x in enumerate(sax_dict[key]) if x == sax_sequence_toidentify]  # returns all indexes
-
-            if key_int < 1:
-                pzmax = dict_numeric[key].iloc[indexes].max().max()
-                pzmin = dict_numeric[key].iloc[indexes].min().min()
-            else:
-                pzmax = max(pzmax, dict_numeric[key].iloc[indexes].max().max())
-                pzmin = min(pzmin, dict_numeric[key].iloc[indexes].min().min())
-            sax_seq_int = sax_seq_int + 1
-        key_int = key_int + 1
+    for key in sax_dict:  # key can be meter_data or bld_id depending on the cuboid selected
+        if key_int < 1:
+            pzmax = dict_numeric[key].max().max()
+            pzmin = dict_numeric[key].min().min()
+            key_int = key_int + 1
+        else:
+            pzmax = max(pzmax, dict_numeric[key].max().max())
+            pzmin = min(pzmin, dict_numeric[key].min().min())
+        
 
     # Calling the subplots
-    fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False, 
-    horizontal_spacing=0.01+len(sax_dict[key][0])*0.005, column_titles=keys, x_title="Hour of the day")
+    fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False,
+                        horizontal_spacing=0.07, subplot_titles=keys,  # horizontal_spacing=0.05
+                        # x_title="Hour of the day"
+                        )
     # Then Loop again of the set to plot
     key_int = 0
     # Looping over sax keys (i.e. attributes or blg keys)
     for key in sax_dict:
         # Plot
         fig.add_trace(go.Heatmap(z=dict_numeric[key],
-                                 x=dict_numeric[key].columns,
-                                 zmax=pzmax, zmin=pzmin,
-                                 colorbar={"title": "Attribute normalized value"},
-                                 colorscale='temps'),
-                      row=1, col=key_int + 1)
+                                    x=dict_numeric[key].columns,
+                                    zmax=pzmax, zmin=pzmin,
+                                    # colorbar={"title": "Attribute normalized value"},
+                                    colorscale='temps'),
+                        row=1, col=key_int + 1)
         fig.update_yaxes(tickmode='array',
-                         tickvals=index_map_dictionary[key]["SAX_idx"],
-                         ticktext=index_map_dictionary[key]["SAX_seq"],
-                         row=1, col=key_int+1)
+                            tickvals=index_map_dictionary[key]["SAX_idx"],
+                            ticktext=index_map_dictionary[key]["SAX_seq"],
+                            row=1, col=key_int + 1)
+        fig.update_xaxes(tickmode='array',
+                            tickvals=[3, 12, 21],
+                            row=1, col=key_int + 1)
         key_int = key_int + 1
-    fig.update_layout(height=800, width=len(keys)*250,
-                      xaxis={"tickmode": "array"},
-                      title_text=f"Daily SAX profiles of {title}",
-                      plot_bgcolor='#fff'
-                      )
+    fig.update_layout(height=550, width=700,
+                        xaxis={"tickmode": "array"},
+                        # title_text=f"Daily SAX profiles of {title}",
+                        plot_bgcolor='#fff',
+                        font=dict(
+                            family="Times New Roman",
+                            color='black',
+                            size=16),
+                        )
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=18)
     return fig
 
-def clust_dailyhm_visualization(dict_numeric, index_map_dictionary, title):
+def multiclust_dailyhm_visualization(dict_numeric, index_map_dictionary):
     """"Function to visualize multi-attribute clustered timeseries from original dataframe with cluster dictionary"""
     keys = list(dict_numeric.keys())
     key_int = 0
     # First loop over all keys and data to identify min and max values of the time series
-    for key in dict_numeric:    # key can be meter_data or bld_id depending on the cuboid selected
+    for key in dict_numeric:  # key can be meter_data or bld_id depending on the cuboid selected
+        sax_seq_int = 0
         if key_int < 1:
             pzmax = dict_numeric[key].max().max()
             pzmin = dict_numeric[key].min().min()
+            sax_seq_int = sax_seq_int + 1
         else:
             pzmax = max(pzmax, dict_numeric[key].max().max())
             pzmin = min(pzmin, dict_numeric[key].min().min())
         key_int = key_int + 1
-    
+
     # Calling the subplots
-    fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False, 
-    horizontal_spacing=0.005, column_titles=keys, x_title="Hour of the day")
+    fig = make_subplots(rows=1, cols=len(keys), shared_yaxes=False,
+                        horizontal_spacing=0.05, column_titles=keys,
+                        column_widths=[10000/len(keys)]*len(keys),
+                        row_heights=[1000],
+                        x_title="Hour of the day")
     # Then Loop again of the set to plot
     key_int = 0
     # Looping over sax keys (i.e. attributes or blg keys)
     for key in dict_numeric:
         # Plot
         fig.add_trace(go.Heatmap(z=dict_numeric[key],
-                                 x=dict_numeric[key].columns,
-                                 zmax=pzmax, zmin=pzmin,
-                                 colorbar={"title": "Attribute normalized value"},
-                                 colorscale='temps'),
-                      row=1, col=key_int + 1)
+                                    x=dict_numeric[key].columns,
+                                    zmax=pzmax, zmin=pzmin, zmid=0,
+                                    zsmooth=False,
+                                    #thickness=60,
+                                    #colorbar={"title": "Attribute normalized value"},
+                                    colorscale='temps'),
+                        row=1, col=key_int + 1)
         fig.update_yaxes(tickmode='array',
-                         tickvals=index_map_dictionary[key]["clust_idx"],
-                         ticktext=[' ']*len(index_map_dictionary[key]["clust_idx"]),
-                         row=1, col=key_int+1)
+                            tickvals=index_map_dictionary[key]["clust_idx"],
+                            ticktext=[' '] * len(index_map_dictionary[key]["clust_idx"]),
+                            row=1, col=key_int + 1)
+        fig.update_xaxes(tickmode='array',
+                            tickvals=[3, 12, 21],
+                            tickfont=dict(size=18),
+                            row=1, col=key_int + 1)
         key_int = key_int + 1
     fig.update_yaxes(tickmode='array',
-                    tickvals=index_map_dictionary[key]["clust_idx"],
-                    ticktext=index_map_dictionary[key]["clust"],
-                    row=1, col=1)
-    fig.update_layout(height=800, width=len(keys)*250,
-                      xaxis={"tickmode": "array"},
-                      title_text=f"Daily SAX profiles of {title}",
-                      plot_bgcolor='#fff')
+                        tickvals=index_map_dictionary[key]["clust_idx"],
+                        ticktext=index_map_dictionary[key]["clust"],
+                        #tickangle=270,
+                        tickfont=dict(size=18),
+                        row=1, col=1)
+    fig.update_layout(height=600, width= 700,
+                        xaxis={"tickmode": "array"},
+                        #title_text=f"Daily SAX profiles of {title}",
+                        plot_bgcolor='#fff',
+                        font=dict(
+                            family="Times New Roman",
+                            color='black',
+                            size=17),
+                        )
+    for i in fig['layout']['annotations']:
+        i['font'] = dict(size=17)
     return fig
 
-def genSankey(df,cat_cols=[],value_cols='',title='Sankey Diagram'):
-    """Wrapper function for Sankey Diagram.
-    Source: https://medium.com/kenlok/how-to-create-sankey-diagrams-from-dataframes-in-python-e221c1b4d6b0"""
-  
-    # maximum of 6 value cols -> 6 colors
-    colorPalette = sns.color_palette("Spectral", len(cat_cols)).as_hex()
-    labelList = []
-    colorNumList = []
-    for catCol in cat_cols:
-        labelListTemp =  list(set(df[catCol].values))
-        colorNumList.append(len(labelListTemp))
-        labelList = labelList + labelListTemp
-        
-    # remove duplicates from labelList
-    labelList = list(dict.fromkeys(labelList))
-    
-    # define colors based on number of levels
-    colorList = []
-    for idx, colorNum in enumerate(colorNumList):
-        colorList = colorList + [colorPalette[idx]]*colorNum
-        
-    # transform df into a source-target pair
-    for i in range(len(cat_cols)-1):
-        if i==0:
-            sourceTargetDf = df[[cat_cols[i],cat_cols[i+1],value_cols]]
-            sourceTargetDf.columns = ['source','target','count']
-        else:
-            tempDf = df[[cat_cols[i],cat_cols[i+1],value_cols]]
-            tempDf.columns = ['source','target','count']
-            sourceTargetDf = pd.concat([sourceTargetDf,tempDf])
-        sourceTargetDf = sourceTargetDf.groupby(['source','target']).agg({'count':'sum'}).reset_index()
-        
-    # add index for source-target pair
-    sourceTargetDf['sourceID'] = sourceTargetDf['source'].apply(lambda x: labelList.index(x))
-    sourceTargetDf['targetID'] = sourceTargetDf['target'].apply(lambda x: labelList.index(x))
-    
-    # creating the sankey diagram
-    data = dict(
-        type='sankey',
-        node = dict(
-          pad = 15,
-          thickness = 20,
-          line = dict(
-            color = "black",
-            width = 0.5
-          ),
-          label = labelList,
-          color = colorList
-        ),
-        link = dict(
-          source = sourceTargetDf['sourceID'],
-          target = sourceTargetDf['targetID'],
-          value = sourceTargetDf['count']
-        )
-      )
-    
-    layout =  dict(
-        title = title,
-        font = dict(
-          size = 10
-        )
-    )
-       
-    fig = dict(data=[data], layout=layout)
-    return fig
-
-def SAXannotated_heatmap_viz(df_olap_norm, df_text, title):
-    fig = ff.create_annotated_heatmap(z=df_olap_norm.values.tolist(),
-                                      x=df_olap_norm.columns.values.tolist(),
-                                      y=df_olap_norm.index.values.tolist(),
-                                      annotation_text=df_text,
-                                      colorbar={"title": "Counts"},
-                                      colorscale='Blues')
-    p_height = len(df_olap_norm.index)*15 if len(df_olap_norm.index)*15 > 400 else 400
-    p_width = len(df_olap_norm.columns)*120 if len(df_olap_norm.columns)*120 > 400 else 400
-    fig.update_layout(height=p_height, width=p_width,
-                      xaxis={"tickmode": "array"},
-                      plot_bgcolor='#fff'
-                      )
-    return fig
-
-def SAXannotated_hm_wcounts(df_olap_normalized, df_text, title):
+def SAXannotated_hm_wcounts(df_olap_normalized, df_text):
     """Heatmap annoted plot with counts per groupby object"""
 
     # Drop row duplicates
@@ -494,16 +431,23 @@ def SAXannotated_hm_wcounts(df_olap_normalized, df_text, title):
 
     # Heatmap
     fig1 = ff.create_annotated_heatmap(z=df_olap_norm_reduced.values.tolist(),
-                                    x=df_olap_norm_reduced.columns.values.tolist(),
-                                    y=df_olap_norm_reduced.index.values.tolist(),
-                                    annotation_text=df_text.drop(['count', 'all_buildings'], axis=1).values.tolist(),
-                                    colorbar={"title": "Counts"},
-                                    colorscale='Blues')
-    p_height = len(df_olap_normalized.index)*15 if len(df_olap_normalized.index)*15 > 400 else 400
-    p_width = len(df_olap_normalized.columns)*120 if len(df_olap_normalized.columns)*120 > 400 else 400
+                                        x=df_olap_norm_reduced.columns.values.tolist(),
+                                        y=df_olap_norm_reduced.index.values.tolist(),
+                                        annotation_text=df_text.drop(['count', 'all_buildings'],
+                                                                    axis=1).values.tolist(),
+                                        colorbar={"title": "Counts"},
+                                        colorscale='temps')
+    # p_height = len(df_olap_normalized.index) * 5 if len(df_olap_normalized.index) * 5 > 400 else 400
+    # p_width = len(df_olap_normalized.columns) * 20 if len(df_olap_normalized.columns) * 20 > 400 else 400
+    p_height = 800
+    p_width = 700
     fig1.update_layout(height=p_height, width=p_width,
                         xaxis={"tickmode": "array"},
-                        #title_text=f" Daily SAX for time slice: {title}",
+                        # title_text=f" Daily SAX for time slice: {title}",
+                        font=dict(
+                            family="Times New Roman",
+                            color='black',
+                            size=17),
                         plot_bgcolor='#fff')
     # Barplot
     fig2 = go.Figure(go.Bar(x=df_text['count'],
@@ -512,13 +456,13 @@ def SAXannotated_hm_wcounts(df_olap_normalized, df_text, title):
                             marker={'color': 'grey'}))
     # Edit layout for multiplot
     for i in range(len(fig1.data)):
-        fig1.data[i].xaxis='x1'
-        fig1.data[i].yaxis='y1'
+        fig1.data[i].xaxis = 'x1'
+        fig1.data[i].yaxis = 'y1'
     fig1.layout.yaxis1.update({'anchor': 'x1'})
     fig1.layout.xaxis1.update({'anchor': 'y1', 'domain': [0, .75]})
     for i in range(len(fig2.data)):
-        fig2.data[i].xaxis='x2'
-        fig2.data[i].yaxis='y2'
+        fig2.data[i].xaxis = 'x2'
+        fig2.data[i].yaxis = 'y2'
     # Initialize xaxis2 and yaxis2
     fig2['layout']['xaxis2'] = {}
     fig2['layout']['yaxis2'] = {}
@@ -528,7 +472,7 @@ def SAXannotated_hm_wcounts(df_olap_normalized, df_text, title):
     fig = go.Figure()
     fig.add_traces([fig1.data[0], fig2.data[0]])
     fig.layout.update(fig1.layout)
-    fig.layout.update(fig2.layout)   
+    fig.layout.update(fig2.layout)
     return fig
 
 def png_output(size):
@@ -549,7 +493,10 @@ def elbow_method(X, n_cluster_max):
         kmeans = KMeans(n_clusters=i, init='k-means++', max_iter=300, n_init=10, random_state=0)
         kmeans_pred_y = kmeans.fit_predict(X)
         wcss.append(kmeans.inertia_)  # WCSS
-        sil.append(metrics.silhouette_score(X, kmeans_pred_y, metric="euclidean"))  # Silhouette score
+        try:
+            sil.append(metrics.silhouette_score(X, kmeans_pred_y, metric="euclidean"))  # Silhouette score
+        except ValueError: # If clustering outputs only 1 cluster - give silhouette a perfect score
+            sil.append(1)
     return wcss, sil
 
 def similarity_index_plot(wcss, sil):
@@ -574,8 +521,65 @@ def similarity_index_plot(wcss, sil):
     plt.show()
     return fig
 
+def similarity_index_werror_plot(wcss, sil, err_wcss, err_sil):
+    fig, axs = plt.subplots(2, 1, sharex=True)
+    # axs[0].scatter(range(2,len(sil)+2),sil,
+    #                c='c', marker='v')
+    # axs[1].scatter(range(2,len(wcss)+2),wcss,
+    #                c='r', marker='o')
+    axs[0].errorbar(range(2,len(sil)+2),sil, 
+                    yerr=err_sil,
+                    fmt='o', elinewidth=0.7,
+                    c='c', ecolor='grey', marker='v')
+    axs[1].errorbar(range(2,len(wcss)+2),wcss, 
+                    yerr=err_wcss,
+                    fmt='o',elinewidth=0.7,
+                    c='r', ecolor='grey', marker='o')
+    # Legend
+    axs[0].set_ylabel('Silhouette')
+    axs[1].set_ylabel('Cluster Sum of Squares')
+    axs[1].set_xlabel('cluster number')
+    # Set ticks inside
+    plt.xticks(range(2,len(sil)+2), range(2,len(sil)+2))
+    axs[0].tick_params(axis="y", direction="in", left="off", labelleft="on")
+    axs[0].tick_params(axis="x", direction="in", left="off", labelleft="on")
+    axs[1].tick_params(axis="x", direction="in", left="off", labelleft="on")
+    axs[1].tick_params(axis="y", direction="in", left="off", labelleft="on")
+    axs[0].grid(axis='y', color='grey', linestyle='--', linewidth=0.5, alpha=0.4)
+    axs[1].grid(axis='y', color='grey', linestyle='--', linewidth=0.5, alpha=0.4)
+    fig.tight_layout()
+    plt.show()
+    return fig
+
 
 ### Visualization
+
+def counter_plot(counter, title=None):
+        """Simple demo of a horizontal bar chart.
+        Source: https://stackoverflow.com/questions/22222573/how-to-plot-counter-object-in-horizontal-bar-chart"""
+        # Sort the counter dictionnary per value
+        threshold = 10
+        # source: https://stackoverflow.com/questions/613183/how-do-i-sort-a-dictionary-by-value
+        counter = {k: v for k, v in sorted(counter.items(), key=lambda item: item[1], reverse=True) if v > threshold}
+        # Counter data, counter is your counter object
+        keys = counter.keys()
+        y_pos = np.arange(len(keys))
+        # get the counts for each key, assuming the values are numerical
+        performance = [counter[k] for k in keys]
+        # Now plotting
+        fig = plt.figure(figsize=(3, 3))
+        ax = plt.gca()
+        hfont = {'fontname': 'Times New Roman'}
+        ax.grid(axis='x', color='grey', linestyle='--', linewidth=0.8, alpha=0.4)
+    
+        plt.barh(y_pos, performance, align='center', color='black', alpha=0.4)
+        plt.yticks(y_pos, keys, fontsize=18, **hfont)
+        plt.xticks(fontsize=20, **hfont)
+        plt.xlabel('counts', fontsize=22, **hfont)
+        plt.title(title, fontsize=26, **hfont)
+        plt.show()
+        return fig
+
 
 def cluster_counter_plot(counts, title=None):
     """Plot motif counts per cluster with whiskers"""
@@ -586,22 +590,24 @@ def cluster_counter_plot(counts, title=None):
     yerr_pos = stats.loc['75%'].values - stats.loc['50%'].values
     yerr_neg = stats.loc['50%'].values - stats.loc['25%'].values
     # Plot
-    fig = plt.figure(figsize=(6, 4))
+    fig = plt.figure(figsize=(3, 3))
     ax = plt.gca()
     plt.bar(y_pos,
-             stats.loc['50%'].values,
-             yerr = [yerr_neg, yerr_pos],
-             tick_label=keys,
-             align='center',
-             alpha=0.4)
+            stats.loc['50%'].values,
+            yerr=[yerr_neg, yerr_pos],
+            tick_label=keys,
+            align='center',
+            color='black',
+            alpha=0.4)
     hfont = {'fontname': 'Times New Roman'}
     ax.tick_params(axis="y", direction="in", left="off", labelleft="on", labelsize=13)
     ax.tick_params(axis="x", direction="in", left="off", labelleft="on", labelsize=13)
-    plt.xticks(y_pos, keys, rotation=90, **hfont)
-    plt.yticks(**hfont)
+    ax.grid(axis='y', color='grey', linestyle='--', linewidth=0.5, alpha=0.4)
+    plt.xticks(y_pos, keys, rotation=90, fontsize=18, **hfont)
+    plt.yticks(fontsize=20,**hfont)
     #plt.xlabel('Symbolic Aggregate Approximation sequences', **hfont)
-    plt.ylabel('counts', fontsize=15, **hfont)
-    plt.title(title, **hfont)
+    plt.ylabel('counts', fontsize=22, **hfont)
+    #plt.title(title, fontsize=24, **hfont)
     plt.tight_layout()
     plt.show()
     return fig
