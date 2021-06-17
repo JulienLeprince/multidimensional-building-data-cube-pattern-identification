@@ -65,13 +65,15 @@ This work follows the [Automated daily pattern filtering of measured building pe
 The analysis then performs pattern identification as an OnLine Analytical Mining (OLAM) process over each cuboid of the 2D lattice of the three dimensional cube. Each cuboids appeals to a specific insight windown, namely, building benchmarking (Cuboid A), in-site view (Cuboid B) and temporal drill-in analysis (Cuboid C).
 
 <p align="center">
-  <img src="https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/3DCube.png" alt="Building Cube"/>
+  <img src="https://github.com/JulienLeprince/multidimensional-building-data-cube-pattern-identification/blob/main/figures/3DCube.jpg" alt="Building Cube"/>
 </p>
 
 ## Authors
 
 **[Julien Leprince](https://github.com/JulienLeprince)**
+
 **Prof. [Clayton Miller](https://github.com/cmiller8)**
+
 **Prof. [Wim Zeiler](https://www.tue.nl/en/research/researchers/wim-zeiler/)**
 
 
